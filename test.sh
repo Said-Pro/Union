@@ -1,129 +1,102 @@
-#!/bin/sh
-# Script d'installation pour UnionStream (version compatible sh)
-# Les commandes originales sont conservées intégralement.
+#!/bin/bash
 
-# Fonctions d'affichage (sans bashisme)
-info() { printf "\033[0;34m[INFO]\033[0m %s\n" "$1"; }
-success() { printf "\033[0;32m[SUCCESS]\033[0m %s\n" "$1"; }
-warn() { printf "\033[0;33m[WARN]\033[0m %s\n" "$1"; }
-error() { printf "\033[0;31m[ERROR]\033[0m %s\n" "$1"; }
+# ============================================================
+#  Installateur de plugin Enigma2 - UnionStream
+#  Compatible : Dreambox, Vu+, Gigablue, Formuler, etc.
+# ============================================================
 
-# Vérifier que le script est exécuté en root
+# --- Configuration ---
+PLUGIN_URL="https://github.com/Said-Pro/Union/raw/refs/heads/main/UnionStream.tar.gz"
+PLUGIN_NAME="UnionStream"
+TMP_FILE="/tmp/${PLUGIN_NAME}.tar.gz"
+PLUGIN_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
+
+# --- Couleurs pour les messages ---
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+log_info()    { echo -e "${GREEN}[INFO]${NC}  $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $1"; }
+log_error()   { echo -e "${RED}[ERREUR]${NC} $1"; exit 1; }
+
+# -------------------------------------------------------
+# 1. Vérification des droits root
+# -------------------------------------------------------
 if [ "$(id -u)" -ne 0 ]; then
-    error "Ce script doit être exécuté en tant que root (utilisez sudo ou connectez-vous en root)."
-    exit 1
+    log_error "Ce script doit être exécuté en tant que root (sudo ./install.sh)"
 fi
 
-# Vérifier la présence des commandes nécessaires
-MISSING=""
-for cmd in wget tar killall; do
-    if ! command -v $cmd >/dev/null 2>&1; then
-        MISSING="$MISSING $cmd"
-    fi
-done
-if [ -n "$MISSING" ]; then
-    error "Commandes manquantes :$MISSING. Installez-les avant de continuer."
-    exit 1
+# -------------------------------------------------------
+# 2. Vérification que le répertoire des plugins existe
+# -------------------------------------------------------
+if [ ! -d "$PLUGIN_DIR" ]; then
+    log_error "Répertoire des plugins introuvable : $PLUGIN_DIR\nVérifiez que Enigma2 est bien installé sur ce système."
 fi
 
-# Vérifier que le répertoire de destination existe
-DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
-if [ ! -d "$DEST_DIR" ]; then
-    warn "Le répertoire $DEST_DIR n'existe pas."
-    printf "Voulez-vous le créer ? (o/n) "
-    read reponse
-    if [ "$reponse" = "o" ] || [ "$reponse" = "O" ]; then
-        mkdir -p "$DEST_DIR"
-        if [ $? -ne 0 ]; then
-            error "Impossible de créer le répertoire. Vérifiez les permissions."
-            exit 1
-        fi
-        success "Répertoire créé."
-    else
-        error "Installation annulée."
-        exit 1
-    fi
+# -------------------------------------------------------
+# 3. Téléchargement
+# -------------------------------------------------------
+log_info "Téléchargement de ${PLUGIN_NAME}..."
+wget --timeout=30 --tries=3 -q --show-progress -O "$TMP_FILE" "$PLUGIN_URL"
+
+if [ $? -ne 0 ] || [ ! -f "$TMP_FILE" ]; then
+    rm -f "$TMP_FILE"
+    log_error "Échec du téléchargement. Vérifiez votre connexion internet."
+fi
+log_info "Téléchargement terminé."
+
+# -------------------------------------------------------
+# 4. Vérification de l'archive
+# -------------------------------------------------------
+log_info "Vérification de l'archive..."
+if ! tar -tzf "$TMP_FILE" > /dev/null 2>&1; then
+    rm -f "$TMP_FILE"
+    log_error "L'archive est corrompue ou invalide."
 fi
 
-# Vérifier l'espace disque dans /tmp (au moins 10 Mo)
-TMP_AVAIL=$(df /tmp | awk 'NR==2 {print $4}')
-if [ "$TMP_AVAIL" -lt 10240 ]; then
-    error "Espace insuffisant dans /tmp (moins de 10 Mo). Libérez de l'espace."
-    exit 1
+# -------------------------------------------------------
+# 5. Suppression de l'ancienne version (si présente)
+# -------------------------------------------------------
+if [ -d "${PLUGIN_DIR}/${PLUGIN_NAME}" ]; then
+    log_warn "Ancienne version détectée — suppression en cours..."
+    rm -rf "${PLUGIN_DIR:?}/${PLUGIN_NAME}"
 fi
 
-# Vérifier l'espace disque dans la destination (au moins 10 Mo)
-DEST_AVAIL=$(df "$DEST_DIR" | awk 'NR==2 {print $4}')
-if [ "$DEST_AVAIL" -lt 10240 ]; then
-    error "Espace insuffisant dans $DEST_DIR (moins de 10 Mo)."
-    exit 1
-fi
+# -------------------------------------------------------
+# 6. Installation
+# -------------------------------------------------------
+log_info "Installation dans ${PLUGIN_DIR}..."
+tar -xzf "$TMP_FILE" -C "$PLUGIN_DIR"
 
-# Demander confirmation globale
-echo
-info "Ce script va installer le plugin UnionStream sur votre récepteur."
-info "Source : https://github.com/Said-Pro/Union/raw/refs/heads/main/UnionStream.tar.gz"
-info "Destination : $DEST_DIR"
-warn "Attention : après l'installation, Enigma2 sera tué (kill -9) mais pas redémarré automatiquement."
-warn "Vous devrez redémarrer Enigma2 manuellement (par exemple avec 'systemctl restart enigma2' ou en rebooting)."
-printf "Voulez-vous continuer ? (o/n) "
-read reponse
-if [ "$reponse" != "o" ] && [ "$reponse" != "O" ]; then
-    info "Installation annulée."
-    exit 0
-fi
-
-# Étape 1 : Téléchargement
-info "Téléchargement de l'archive..."
-wget -O /tmp/UnionStream.tar.gz https://github.com/Said-Pro/Union/raw/refs/heads/main/UnionStream.tar.gz
-if [ $? -ne 0 ] || [ ! -f /tmp/UnionStream.tar.gz ]; then
-    error "Échec du téléchargement."
-    exit 1
-fi
-success "Téléchargement terminé."
-
-# Étape 2 : Extraction
-info "Extraction de l'archive vers $DEST_DIR..."
-cd /tmp/
-tar -xzf UnionStream.tar.gz -C "$DEST_DIR"
 if [ $? -ne 0 ]; then
-    error "Échec de l'extraction."
-    rm -f /tmp/UnionStream.tar.gz
-    exit 1
+    rm -f "$TMP_FILE"
+    log_error "Échec de l'extraction. Vérifiez les permissions du répertoire."
 fi
-success "Extraction terminée."
 
-# Optionnel : lister les fichiers installés
-info "Fichiers installés :"
-ls -la "$DEST_DIR" | grep -E "Union|Stream" 2>/dev/null || echo "Aucun fichier visible (peut-être un nom différent)."
+# -------------------------------------------------------
+# 7. Nettoyage
+# -------------------------------------------------------
+rm -f "$TMP_FILE"
+log_info "Fichiers temporaires supprimés."
 
-# Étape 3 : Nettoyage
-info "Nettoyage de l'archive temporaire..."
-rm -f /tmp/UnionStream.tar.gz
-success "Nettoyage effectué."
+# -------------------------------------------------------
+# 8. Redémarrage propre d'Enigma2
+# -------------------------------------------------------
+log_info "Redémarrage d'Enigma2..."
 
-# Étape 4 : Arrêt d'Enigma2
-warn "La commande 'killall -9 enigma2' va maintenant être exécutée."
-warn "Enigma2 sera arrêté immédiatement. Le récepteur perdra son interface."
-warn "Pour le redémarrer, vous devrez :"
-warn "  - Soit exécuter 'systemctl restart enigma2' (si systemd est utilisé)"
-warn "  - Soit redémarrer physiquement le récepteur"
-printf "Confirmer l'arrêt d'Enigma2 ? (o/n) "
-read reponse
-if [ "$reponse" = "o" ] || [ "$reponse" = "O" ]; then
-    info "Arrêt forcé d'Enigma2..."
-    killall -9 enigma2
-    if [ $? -eq 0 ]; then
-        success "Commande kill exécutée. Enigma2 a été arrêté."
-    else
-        warn "La commande killall a échoué (peut-être qu'Enigma2 n'était pas en cours d'exécution ?)."
-    fi
+if command -v systemctl &> /dev/null; then
+    systemctl restart enigma2
+elif command -v init &> /dev/null; then
+    # Fallback pour les récepteurs sans systemd (ex: Dreambox OpenDreamux)
+    kill -HUP $(pidof enigma2) 2>/dev/null || killall enigma2 2>/dev/null
 else
-    warn "Arrêt annulé. Enigma2 n'a pas été tué."
+    log_warn "Impossible de redémarrer Enigma2 automatiquement."
+    log_warn "Redémarrez votre récepteur manuellement."
 fi
 
-# Message final
-echo
-success "Installation terminée."
-info "Rappel : Enigma2 n'est pas redémarré automatiquement."
-info "Pour utiliser le plugin, redémarrez Enigma2 manuellement ou rebootez."
+echo ""
+log_info "✅ Plugin '${PLUGIN_NAME}' installé avec succès !"
+echo -e "   → Accès : Menu > Plugins > ${PLUGIN_NAME}"
+echo ""

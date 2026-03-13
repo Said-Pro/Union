@@ -1,8 +1,8 @@
 #!/bin/sh
-# Script d'installation pour UnionStream (version compatible sh)
+# Script d'installation pour UnionStream (version compatible sh avec lecture depuis /dev/tty)
 # Les commandes originales sont conservées intégralement.
 
-# Fonctions d'affichage (sans bashisme)
+# Fonctions d'affichage
 info() { printf "\033[0;34m[INFO]\033[0m %s\n" "$1"; }
 success() { printf "\033[0;32m[SUCCESS]\033[0m %s\n" "$1"; }
 warn() { printf "\033[0;33m[WARN]\033[0m %s\n" "$1"; }
@@ -30,8 +30,8 @@ fi
 DEST_DIR="/usr/lib/enigma2/python/Plugins/Extensions"
 if [ ! -d "$DEST_DIR" ]; then
     warn "Le répertoire $DEST_DIR n'existe pas."
-    printf "Voulez-vous le créer ? (o/n) "
-    read reponse
+    printf "Voulez-vous le créer ? (o/n) " >/dev/tty
+    read reponse < /dev/tty
     if [ "$reponse" = "o" ] || [ "$reponse" = "O" ]; then
         mkdir -p "$DEST_DIR"
         if [ $? -ne 0 ]; then
@@ -66,8 +66,8 @@ info "Source : https://github.com/Said-Pro/Union/raw/refs/heads/main/UnionStream
 info "Destination : $DEST_DIR"
 warn "Attention : après l'installation, Enigma2 sera tué (kill -9) mais pas redémarré automatiquement."
 warn "Vous devrez redémarrer Enigma2 manuellement (par exemple avec 'systemctl restart enigma2' ou en rebooting)."
-printf "Voulez-vous continuer ? (o/n) "
-read reponse
+printf "Voulez-vous continuer ? (o/n) " >/dev/tty
+read reponse < /dev/tty
 if [ "$reponse" != "o" ] && [ "$reponse" != "O" ]; then
     info "Installation annulée."
     exit 0
@@ -108,8 +108,8 @@ warn "Enigma2 sera arrêté immédiatement. Le récepteur perdra son interface."
 warn "Pour le redémarrer, vous devrez :"
 warn "  - Soit exécuter 'systemctl restart enigma2' (si systemd est utilisé)"
 warn "  - Soit redémarrer physiquement le récepteur"
-printf "Confirmer l'arrêt d'Enigma2 ? (o/n) "
-read reponse
+printf "Confirmer l'arrêt d'Enigma2 ? (o/n) " >/dev/tty
+read reponse < /dev/tty
 if [ "$reponse" = "o" ] || [ "$reponse" = "O" ]; then
     info "Arrêt forcé d'Enigma2..."
     killall -9 enigma2
